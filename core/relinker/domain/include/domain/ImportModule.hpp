@@ -72,6 +72,7 @@ inline std::string ImportModule(const std::string& symbol, const std::map<std::u
     auto lookup = normalized;
     if (lookup == "libmonosgen") lookup = "libmonosgen-2_0";
     if (lookup == "libSceGnmDriver") lookup = "libSceGnmDriver_padebug";
+    if (lookup == "libSceJson") lookup = "libSceJson2";
     const auto findMatch = [&](const std::string& candidate) {
         std::string matched;
         for (const auto& dependency : dependencies) {

@@ -10,7 +10,7 @@ static void Ph(Bytes& b, int i, unsigned type, unsigned flags, unsigned off, uns
     Io::WriteU64(b,p+8,off);Io::WriteU64(b,p+16,va);Io::WriteU64(b,p+24,va);
     Io::WriteU64(b,p+32,size);Io::WriteU64(b,p+40,size);Io::WriteU64(b,p+48,8);
 }
-static Bytes Fixture(bool reverse=false) {
+static Bytes Fixture(bool reverse=false, const char* hostLibrary="libmonosgen-2.0.prx", const char* logicalModule="libmonosgen") {
     Bytes b(0x4000);std::memcpy(b.data(),"\x7f" "ELF\x02\x01\x01",7);
     Io::WriteU16(b,16,3);Io::WriteU16(b,18,62);Io::WriteU32(b,20,1);
     Io::WriteU64(b,32,64);Io::WriteU16(b,52,64);Io::WriteU16(b,54,56);Io::WriteU16(b,56,3);
@@ -18,7 +18,7 @@ static Bytes Fixture(bool reverse=false) {
     b[0x1020]=0xc3;b[0x1028]=0xc3;
     std::string strings(1,'\0');auto str=[&](const char* s){auto o=strings.size();strings+=s;strings+='\0';return o;};
     const auto a=str(reverse?"alias#B#A":"alias#A#A"),c=str(reverse?"alias#A#A":"alias#B#A");
-    const auto imp=str("imported#A#B"),host=str("libmonosgen-2.0.prx"),module=str("fixtureModule"),logical=str("libmonosgen");
+    const auto imp=str("imported#A#B"),host=str(hostLibrary),module=str("fixtureModule"),logical=str(logicalModule);
     std::copy(strings.begin(),strings.end(),b.begin()+0x2200);
     const std::pair<std::uint64_t,std::uint64_t> tags[]={{5,0x2200},{10,strings.size()},{6,0x2400},{11,24},{4,0x2600},{7,0x2700},{8,48},{9,24},{1,host},{0x61000043,module},{0x61000045,(1ull<<48)|logical},{0,0}};
     Ph(b,2,2,6,0x2000,0x2000,sizeof(tags));
@@ -56,5 +56,20 @@ int main() {
     const std::array<std::string, 2> gnmBoth{"libSceGnmDriver_padebug.prx", "libSceGnmDriver.prx"};
     if (Domain::ImportModule("nid#A#B", gnm, padebug) != padebug[0]) return 93;
     if (Domain::ImportModule("nid#A#B", gnm, gnmBoth) != gnmBoth[1]) return 94;
+    const std::map<std::uint64_t, std::string> json{{1, "libSceJson"}};
+    const std::array<std::string, 1> json2Dependency{"libSceJson2.prx"};
+    const std::array<std::string, 2> bothJson{"libSceJson.prx", "libSceJson2.prx"};
+    const std::array<std::string, 1> jsonOther{"libSceJson3.prx"};
+    const std::array<std::string, 2> jsonAmbiguous{"libSceJson2.prx", "libSceJson2.sprx"};
+    if (Domain::ImportModule("nid#A#B", json, json2Dependency) != json2Dependency[0]) return 10;
+    if (Domain::ImportModule("nid#A#B", json, bothJson) != bothJson[0]) return 11;
+    if (!Domain::ImportModule("nid#A#B", json, jsonOther).empty()) return 12;
+    try { Domain::ImportModule("nid#A#B", json, jsonAmbiguous); return 13; }
+    catch (const Domain::RelinkerException&) {}
+    const std::map<std::uint64_t, std::string> json2{{1, "libSceJson2"}};
+    const std::array<std::string, 1> jsonLegacy{"libSceJson.prx"};
+    if (!Domain::ImportModule("nid#A#B", json2, jsonLegacy).empty()) return 35;
+    const auto jsonImage = Relinker::GuestImageReader().Read("json-consumer.prx", Fixture(false, "libSceJson2.prx", "libSceJson"), true);
+    if (jsonImage.Symbols.size() != 4 || jsonImage.Symbols[3].Library != "libSceJson2.prx") return 14;
     std::cout << "module mapping checks passed\n";
 }
